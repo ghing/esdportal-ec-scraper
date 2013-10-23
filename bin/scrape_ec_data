@@ -92,7 +92,7 @@ function getGSCProfile(licenseNum, providerId) {
     providerId: providerId
   })
   .on('data', function(data) {
-    winston.info("info", "Got GSC profile data for %s (%s)", licenseNum, providerId);
+    winston.log("info", "Got GSC profile data for %s (%s)", licenseNum, providerId);
     merger.update('profile', data.LicenseNumber, data);
     profilesFetched++;
   })
@@ -132,7 +132,7 @@ zips.addRangeChangeListener(function(plus, minus, index) {
 globalOpts.username = argv.u;
 globalOpts.password = argv.p;
 
-winston.log("info", "Starting scraping run");
+winston.info("Starting scraping run");
 start = new Date();
 var stateData = new dataset.CDCDataset()
   .fromURL()
