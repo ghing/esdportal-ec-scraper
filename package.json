@@ -11,7 +11,8 @@
   "author": "Geoffrey Hing <geoffhing@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "csv": ">= 0.3.0",
+    "async": ">=0.2.0",
+    "csv": ">=0.3.0",
     "underscore": ">=1.5.0",
     "JSONStream": ">=0.7.0",
     "optimist": ">=0.6.0",

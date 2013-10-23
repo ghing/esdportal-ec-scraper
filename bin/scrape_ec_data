@@ -13,6 +13,7 @@ var argv = require('optimist')
     .default('logfile', path.join(process.cwd(), 'scrape_ec_data.log'))
     .argv;
 var _ = require('underscore'); 
+var async = require('async');
 var dataset = require('../lib/dataset');
 
 var globalOpts = {};
@@ -25,8 +26,25 @@ var numProfiles = 0;
 var profilesFetched = 0;
 var fetchedStateData = false;
 var delay = 1000;
-var lastDelay = 0;
 var start;
+var scheduler = (function () {
+  var requestQueue = async.queue(function(task, callback) {
+    task();
+    setTimeout(callback, delay);
+  }, 1);
+
+  return { 
+    schedule: function(fn) {
+      // If we're loading data from files, no need to delay
+      if (globalOpts.fromFiles) {
+        fn();
+        return;
+      }
+
+      requestQueue.push(fn);
+    }
+  };
+}());
 
 // Set up logging
 winston.add(winston.transports.File, { filename: argv.logfile });
@@ -49,7 +67,7 @@ merger.on('update', function(slug, key, data, count) {
     // we can get the profile 
     numProfiles++;
     qsData = merger.get('quicksearch', key); 
-    schedule(function() {
+    scheduler.schedule(function() {
       getGSCProfile(key, qsData.GSCProviderID);
     });
   }
@@ -81,23 +99,6 @@ function done() {
   now = new Date();
   elapsed = now - start;
   winston.log("info", "Scraping run finished in " + elapsed + " milliseconds"); 
-}
-
-// HACK: This is horrible
-function schedule(fn) {
-  // If we're loading data from files, no need to delay
-  if (globalOpts.fromFiles) {
-    fn();
-    return;
-  }
-
-  if (!lastDelay) {
-    fn();
-  }
-  else {
-    setTimeout(fn, lastDelay);
-  }
-  lastDelay += delay; 
 }
 
 function getGSCProfile(licenseNum, providerId) {
@@ -177,7 +178,7 @@ var stateData = new dataset.CDCDataset()
     if (_.isUndefined(zipSeen[zip])) {
       zipSeen[zip] = true;
       numZips++;
-      schedule(function() {
+      scheduler.schedule(function() {
         getGSCDataForZip(zip);
       });
     }
