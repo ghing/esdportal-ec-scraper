@@ -3,9 +3,14 @@
 var csv = require('csv');
 var events = require('events');
 var winston = require('winston');
+var path = require('path');
 var argv = require('optimist')
     .usage("Usage: $0 -u [username] -p [password] > out.csv")
     .demand(['u', 'p'])
+    .default('archivedir', path.join(process.cwd(), 'scraped_data')
+)
+    .default('fromfiles', false)
+    .default('logfile', path.join(process.cwd(), 'scrape_ec_data.log'))
     .argv;
 
 var _ = require('underscore'); 
@@ -27,8 +32,7 @@ var start;
 var headerWritten = false;
 
 // Set up logging
-// TODO: Paramaterize the log filename
-winston.add(winston.transports.File, { filename: './scrape_ec_data.log' });
+winston.add(winston.transports.File, { filename: argv.logfile });
 winston.remove(winston.transports.Console);
 
 function writeRow(data) {
@@ -75,6 +79,14 @@ function done() {
 
 // HACK: This is horrible
 function schedule(fn) {
+  // If we're loading data from files, no need to delay
+  /*
+  if (globalOpts.fromFiles) {
+    fn();
+    return;
+  }
+  */
+
   if (!lastDelay) {
     fn();
   }
@@ -85,33 +97,40 @@ function schedule(fn) {
 }
 
 function getGSCProfile(licenseNum, providerId) {
+  var filename;
   var gscData = new dataset.GSCProfileDataset()
-  .fromURL(null, {
-    username: globalOpts.username, 
-    password: globalOpts.password, 
-    providerId: providerId
-  })
-  .on('data', function(data) {
-    winston.log("info", "Got GSC profile data for %s (%s)", licenseNum, providerId);
-    merger.update('profile', data.LicenseNumber, data);
-    profilesFetched++;
-  })
-  .on('end', function() {
-    checkDone();
-  });
+    .on('data', function(data) {
+      winston.log("info", "Got GSC profile data for %s (%s)", licenseNum, providerId);
+      merger.update('profile', data.LicenseNumber, data);
+      profilesFetched++;
+    })
+    .on('end', function() {
+      checkDone();
+    });
+
+  if (globalOpts.fromFiles) {
+    filename = path.join(globalOpts.archiveDir, providerId + '.html');
+    winston.log('info', "Fetching GSC profile data for %s from file %s", licenseNum, filename);
+    gscData.fromFile(filename);
+  }
+  else {
+    gscData.fromURL(null, {
+      username: globalOpts.username, 
+      password: globalOpts.password, 
+      achiveDir: globalOpts.archiveDir,
+      providerId: providerId
+    });
+  }
 }
 
 function getGSCDataForZip(zip) {
-    var criteria = _.clone(dataset.BASE_CRITERIA);
-    criteria.SEARCHTYPE = 'Zip';
-    criteria.ZIP = zip;
-    winston.log("info", "Fetching GSC data for %s", zip);
-    var gscData = new dataset.GSCQuicksearchDataset()
-    .fromURL(null, {
-      username: globalOpts.username, 
-      password: globalOpts.password, 
-      criteria: criteria
-    })
+  var filename;
+  var criteria = _.clone(dataset.BASE_CRITERIA);
+
+  criteria.SEARCHTYPE = 'Zip';
+  criteria.ZIP = zip;
+
+  var gscData = new dataset.GSCQuicksearchDataset()
     .on('data', function(data) {
       merger.update('quicksearch', data.LicenseNumber, data);
     })
@@ -120,10 +139,26 @@ function getGSCDataForZip(zip) {
       zipsFetched++;
       checkDone();
     });
+
+  if (globalOpts.fromFiles) {
+    filename = path.join(globalOpts.archiveDir, zip + '.json');
+    winston.log("info", "Fetching GSC data for %s from file %s", zip, filename);
+    gscData.fromFile(filename);
+  }
+  else {
+    winston.log("info", "Fetching GSC data for %s", zip);
+    gscData.fromURL(null, {
+      username: globalOpts.username, 
+      password: globalOpts.password, 
+      archiveDir: globalOpts.archiveDir,
+      criteria: criteria
+    });
+  }
 }
 
 zips.addRangeChangeListener(function(plus, minus, index) {
   var zip = _.isString(plus) ? plus : plus.toString();
+
   schedule(function() {
     getGSCDataForZip(zip);
   });
@@ -131,11 +166,12 @@ zips.addRangeChangeListener(function(plus, minus, index) {
 
 globalOpts.username = argv.u;
 globalOpts.password = argv.p;
+globalOpts.archiveDir = argv.archivedir;
+globalOpts.fromFiles = argv.fromfiles;
 
 winston.info("Starting scraping run");
 start = new Date();
 var stateData = new dataset.CDCDataset()
-  .fromURL()
   .on('data', function(data) {
     recordsFetched++;
     merger.update('cdc', data.LicenseNumber, data);
@@ -144,3 +180,12 @@ var stateData = new dataset.CDCDataset()
   .on('end', function() {
     fetchedStateData = true;
   });
+
+if (globalOpts.fromFiles) {
+  stateData.fromFile(path.join(globalOpts.archiveDir, 'cdc.txt'));
+}
+else {
+  stateData.fromURL(null, {
+    archiveDir: globalOpts.archiveDir
+  });
+}
