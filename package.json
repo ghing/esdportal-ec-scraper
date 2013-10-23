@@ -1,0 +1,23 @@
+{
+  "name": "esdportal_early_childhood_scraper",
+  "version": "0.0.0",
+  "description": "Scrape data for Michigan early childhood education programs from greatstartconnect.org and state datasets",
+  "main": "index.js",
+  "bin": {"scrape_ec_data": "./bin/scrape_ec_data"},
+  "directories": {"bin": "./bin"},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Geoffrey Hing <geoffhing@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "csv": ">= 0.3.0",
+    "underscore": ">=1.5.0",
+    "JSONStream": ">=0.7.0",
+    "collections": ">=0.2.0",
+    "optimist": ">=0.6.0",
+    "request": ">=2.27.0",
+    "cheerio": ">=0.12.0",
+    "winston": ">=0.7.0"
+  }
+}

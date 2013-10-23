@@ -1,0 +1,146 @@
+#!/usr/bin/env node
+
+var csv = require('csv');
+var events = require('events');
+var winston = require('winston');
+var argv = require('optimist')
+    .usage("Usage: $0 -u [username] -p [password] > out.csv")
+    .demand(['u', 'p'])
+    .argv;
+
+var _ = require('underscore'); 
+var dataset = require('../lib/dataset');
+var Set = require('collections/set');
+
+var merged = {};
+var deferMerge = {};
+var globalOpts = {};
+var output = csv().to.stream(process.stdout);
+var zipsFetched = 0;
+var recordsFetched = 0;
+var profilesFetched = 0;
+var zips = new Set();
+var fetchedStateData = false;
+var delay = 1000;
+var lastDelay = 0;
+var start;
+var headerWritten = false;
+
+// Set up logging
+// TODO: Paramaterize the log filename
+winston.add(winston.transports.File, { filename: './scrape_ec_data.log' });
+winston.remove(winston.transports.Console);
+
+function writeRow(data) {
+  if (!headerWritten) {
+    output.write(dataset.FIELDS);
+    headerWritten = true;
+  } 
+
+  output.write(data);
+}
+
+var merger = new dataset.DataMerger(['cdc', 'quicksearch', 'profile']);
+merger.on('update', function(slug, key, data, count) {
+  var qsData;
+  if (count == 2) {
+    // We have both a LicenseNumber and an ProviderID for this record. now
+    // we can get the profile 
+    qsData = merger.get('quicksearch', key); 
+    schedule(function() {
+      getGSCProfile(key, qsData.GSCProviderID);
+    });
+  }
+})
+.on('merged', function(licenseNum, data) {
+  // We've gotten a record from all three datasets. We can write the row.
+  writeRow(data);
+});
+
+function checkDone() {
+  if (fetchedStateData && merger.merged >= recordsFetched) {
+    done();
+  }
+  winston.log('info', "%d/%d zips, %d/%d profiles fetched", zipsFetched, zips.length, profilesFetched, recordsFetched);
+}
+
+function done() {
+  var now;
+  var elapsed;
+
+  now = new Date();
+  elapsed = now - start;
+  winston.log("info", "Scraping run finished in " + elapsed + " milliseconds"); 
+}
+
+// HACK: This is horrible
+function schedule(fn) {
+  if (!lastDelay) {
+    fn();
+  }
+  else {
+    setTimeout(fn, lastDelay);
+  }
+  lastDelay += delay; 
+}
+
+function getGSCProfile(licenseNum, providerId) {
+  var gscData = new dataset.GSCProfileDataset()
+  .fromURL(null, {
+    username: globalOpts.username, 
+    password: globalOpts.password, 
+    providerId: providerId
+  })
+  .on('data', function(data) {
+    winston.info("info", "Got GSC profile data for %s (%s)", licenseNum, providerId);
+    merger.update('profile', data.LicenseNumber, data);
+    profilesFetched++;
+  })
+  .on('end', function() {
+    checkDone();
+  });
+}
+
+function getGSCDataForZip(zip) {
+    var criteria = _.clone(dataset.BASE_CRITERIA);
+    criteria.SEARCHTYPE = 'Zip';
+    criteria.ZIP = zip;
+    winston.log("info", "Fetching GSC data for %s", zip);
+    var gscData = new dataset.GSCQuicksearchDataset()
+    .fromURL(null, {
+      username: globalOpts.username, 
+      password: globalOpts.password, 
+      criteria: criteria
+    })
+    .on('data', function(data) {
+      merger.update('quicksearch', data.LicenseNumber, data);
+    })
+    .on('end', function() {
+      winston.log("info", "Got GSC data for %s", zip);
+      zipsFetched++;
+      checkDone();
+    });
+}
+
+zips.addRangeChangeListener(function(plus, minus, index) {
+  var zip = _.isString(plus) ? plus : plus.toString();
+  schedule(function() {
+    getGSCDataForZip(zip);
+  });
+}, 'add');
+
+globalOpts.username = argv.u;
+globalOpts.password = argv.p;
+
+winston.log("info", "Starting scraping run");
+start = new Date();
+var stateData = new dataset.CDCDataset()
+  .fromURL()
+  .on('data', function(data) {
+    recordsFetched++;
+    merger.update('cdc', data.LicenseNumber, data);
+    zips.add(data.ZipCode);
+  })
+  .on('end', function() {
+    fetchedStateData = true;
+  });
