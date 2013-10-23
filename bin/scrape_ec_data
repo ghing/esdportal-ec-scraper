@@ -12,12 +12,9 @@ var argv = require('optimist')
     .default('fromfiles', false)
     .default('logfile', path.join(process.cwd(), 'scrape_ec_data.log'))
     .argv;
-
 var _ = require('underscore'); 
 var dataset = require('../lib/dataset');
 
-var merged = {};
-var deferMerge = {};
 var globalOpts = {};
 var output = csv().to.stream(process.stdout);
 var numZips = 0;
@@ -30,17 +27,16 @@ var fetchedStateData = false;
 var delay = 1000;
 var lastDelay = 0;
 var start;
-var headerWritten = false;
 
 // Set up logging
 winston.add(winston.transports.File, { filename: argv.logfile });
 winston.remove(winston.transports.Console);
 
 function writeRow(data) {
-  if (!headerWritten) {
+  if(_.isUndefined(writeRow.headerWritten)) {
     output.write(dataset.FIELDS);
-    headerWritten = true;
-  } 
+    writeRow.headerWritten = true;
+  }
 
   output.write(data);
 }
