@@ -1,5 +1,5 @@
 {
-  "name": "esdportal_early_childhood_scraper",
+  "name": "esdportal-ec-scraper",
   "version": "0.0.0",
   "description": "Scrape data for Michigan early childhood education programs from greatstartconnect.org and state datasets",
   "main": "index.js",
