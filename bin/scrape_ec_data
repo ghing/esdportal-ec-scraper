@@ -45,6 +45,7 @@ var scheduler = (function () {
     }
   };
 }());
+var hasErrs = false;
 
 // Set up logging
 winston.add(winston.transports.File, { filename: argv.logfile });
@@ -99,6 +100,10 @@ function done() {
   now = new Date();
   elapsed = now - start;
   winston.log("info", "Scraping run finished in " + elapsed + " milliseconds"); 
+
+  if (hasErrs) {
+    process.exit(1);
+  }
 }
 
 function getGSCProfile(licenseNum, providerId) {
@@ -111,6 +116,10 @@ function getGSCProfile(licenseNum, providerId) {
     })
     .on('end', function() {
       checkDone();
+    })
+    .on('error', function(err) {
+      winston.error(err);
+      hasErrs = true;
     });
 
   if (globalOpts.fromFiles) {
@@ -126,6 +135,8 @@ function getGSCProfile(licenseNum, providerId) {
       providerId: providerId
     });
   }
+
+  return gscData;
 }
 
 function getGSCDataForZip(zip) {
@@ -143,6 +154,10 @@ function getGSCDataForZip(zip) {
       winston.log("info", "Got GSC data for %s", zip);
       zipsFetched++;
       checkDone();
+    })
+    .on('error', function(err) {
+      winston.error(err);
+      hasErrs = true;
     });
 
   if (globalOpts.fromFiles) {
@@ -185,6 +200,10 @@ var stateData = new dataset.CDCDataset()
   })
   .on('end', function() {
     fetchedStateData = true;
+  })
+  .on('error', function(err) {
+    winston.error(err);
+    hasErrs = true;
   });
 
 if (globalOpts.fromFiles) {
