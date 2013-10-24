@@ -131,7 +131,7 @@ function getGSCProfile(licenseNum, providerId) {
     gscData.fromURL(null, {
       username: globalOpts.username, 
       password: globalOpts.password, 
-      achiveDir: globalOpts.archiveDir,
+      archiveDir: globalOpts.archiveDir,
       providerId: providerId
     });
   }
