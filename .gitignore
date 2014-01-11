@@ -2,5 +2,4 @@ node_modules
 *.log
 *.swp
 data
-scraped_data
 *.csv
