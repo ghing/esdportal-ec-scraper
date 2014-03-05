@@ -16,6 +16,7 @@ var argv = require('optimist')
 var _ = require('underscore'); 
 var async = require('async');
 var dataset = require('../lib/dataset');
+var DataMerger = require('../lib/merger').DataMerger;
 
 var globalOpts = {
   // Filename of file that contains only early childhood programs within 
@@ -65,7 +66,7 @@ function writeRow(data) {
   output.write(data);
 }
 
-var merger = new dataset.DataMerger(['cdc', 'quicksearch', 'profile']);
+var merger = new DataMerger(['cdc', 'quicksearch', 'profile']);
 merger.on('update', function(slug, key, data, count) {
   var qsData;
   if (count == 2) {
