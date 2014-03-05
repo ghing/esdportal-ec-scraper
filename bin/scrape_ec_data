@@ -9,7 +9,7 @@ var argv = require('optimist')
     .demand(['u', 'p'])
     .default('archivedir', path.join(process.cwd(), 'scraped_data')
 )
-    .default('inputdir', path.join(process.cwd(), 'input_data')
+    .default('inputdir', path.join(process.cwd(), 'input_data'))
     .default('fromfiles', false)
     .default('logfile', path.join(process.cwd(), 'scrape_ec_data.log'))
     .argv;
@@ -66,7 +66,7 @@ function writeRow(data) {
   output.write(data);
 }
 
-var merger = new DataMerger(['cdc', 'quicksearch', 'profile']);
+var merger = new DataMerger(['cdc', 'quicksearch', 'profile'], ['inzone']);
 merger.on('update', function(slug, key, data, count) {
   var qsData;
   if (count == 2) {
@@ -97,9 +97,9 @@ function done() {
   
   // There are likely some records in the state dataset that don't have
   // corresponding GSC records.  Include them anyway.
-  merger.ids('cdc').forEach(function(key) {
-    if (!merger.has('quicksearch', key)) {
-      writeRow(merger.get('cdc', key));
+  merger.ids('cdc').forEach(function(id) {
+    if (!merger.has('quicksearch', id)) {
+      writeRow(merger.get('cdc', id));
     }
   });
 
@@ -197,6 +197,9 @@ start = new Date();
 var inZoneData = new dataset.InZoneDataset()
   .on('data', function(data) {
     merger.update('inzone', data.LicenseNumber, data);
+  })
+  .on('end', function() {
+    merger.setHasAllData('inzone');
   });
 var stateData = new dataset.CDCDataset()
   .on('data', function(data) {
@@ -214,6 +217,7 @@ var stateData = new dataset.CDCDataset()
   .on('end', function() {
     var inZonePath = path.join(globalOpts.inputDir, 
                                globalOpts.inZoneFilename);
+    inZoneData.fromFile(inZonePath);
     fetchedStateData = true;
   })
   .on('error', function(err) {
